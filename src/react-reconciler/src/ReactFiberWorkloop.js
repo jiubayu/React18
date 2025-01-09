@@ -1,14 +1,23 @@
-import { schedulerCallback } from "scheduler/src/forks/Schduler";
+import {
+  schedulerCallback,
+  ImmediatePriority as ImmediateSchedulerPriority,
+  UserBlockingPriority as UserBlockingSchedulerPriority,
+  NormalPriority as NormalSchedulerPriority,
+  IdlePriority as IdleSchedulerPriority,
+  shouldYield
+ } from "scheduler/src/forks/Schduler";
 import { beginWork } from "./ReactFiberBeginWork";
 import { createWorkInProgress } from "./ReactFiber";
 import { completeWork } from "./ReactFiberCompleteWork";
-import { ChildDeletion, MutationMask, NoFlags, Placement, Update } from "./ReactFiberFlags";
-import { commitMutationEffectsOnFiber } from "./ReactFiberCommitWork";
+import { ChildDeletion, MutationMask, NoFlags, Passive, Placement, Update } from "./ReactFiberFlags";
+import { commitMutationEffectsOnFiber, commitPassiveMountEffects, commitPassiveUnmountEffects, commitLayoutEffects } from "./ReactFiberCommitWork";
 import { FunctionComponent, HostComponent, HostRoot, HostText } from "./ReactWorkTags";
 import { finishQueueingConcurrentUpdates } from "./ReactFiberConcurrentUpdates";
 
 let workInProgress = null;
 let workInPorgressRoot = null;
+let rootDoesHavaPassiveEffect = false; // 此根fiber上有没有useEffect类型的副作用
+let rootWithPendingPassiveEffects = null; // 具有useEffect副作用的根节点 fiberRootNode div#root
 
 /**
  * 计划更新root
@@ -25,14 +34,15 @@ function ensureRootIsScheduled(root) {
   if (workInPorgressRoot) return;
   workInPorgressRoot = root;
   // 告诉浏览器要执行performanceConcurrentWorkOnRoot，参数就为root
-  schedulerCallback(performanceConcurrentWorkOnRoot.bind(null, root));
+  schedulerCallback(NormalSchedulerPriority, performanceConcurrentWorkOnRoot.bind(null, root));
+  // schedulerCallback(performanceConcurrentWorkOnRoot.bind(null, root));
 }
 /**
  * 根据fiber构建fiber树，创建真实的DOM节点，还需要把真实的DOM节点插入容器
  * @param {*} root 
  */
-function performanceConcurrentWorkOnRoot(root) {
-  debugger
+function performanceConcurrentWorkOnRoot(root, timeout) {
+  // debugger
   // 第一次渲染以同步的方式渲染根节点，初次渲染的时候，都是同步
   renderRootSync(root);
   // console.log(root, 'root----')
@@ -43,9 +53,31 @@ function performanceConcurrentWorkOnRoot(root) {
   workInPorgressRoot = null;
 }
 
+function flushPassiveEffect() {
+  if (rootWithPendingPassiveEffects !== null) {
+    const root = rootWithPendingPassiveEffects;
+    console.log('下一个宏任务中cflushPassiveEffect~~~~~~~~~~~~~~~~~~~~~~~~~~');
+    // 执行卸载副作用 destroy
+    commitPassiveUnmountEffects(root.current);
+    // 执行挂载副作用 create
+    commitPassiveMountEffects(root, root.current);
+  }
+}
+
 function commitRoot(root) {
+  // debugger
+  // 新的构建好的根fiber
   const { finishedWork } = root;
-  printFinishedWork(finishedWork);
+  // 有effect
+  if ((finishedWork.subtreeFlags & Passive) !== NoFlags ||
+    (finishedWork.flags & Passive) !== NoFlags) {
+    if (!rootDoesHavaPassiveEffect) {
+      rootDoesHavaPassiveEffect = true;
+      schedulerCallback(flushPassiveEffect);
+    }
+  }
+  // printFinishedWork(finishedWork);
+  console.log('开始commit~~~~~~~~~~~~~~~~~~~~~~~~~~');
   // 判断子树有没有副作用
   const subtreeFlags = (finishedWork.subtreeFlags & MutationMask) !== NoFlags;
   // 判断自己是否有副作用
@@ -53,9 +85,18 @@ function commitRoot(root) {
   // 如果自己或者子节点有副作用，就执行操作
   if (subtreeFlags || rootHasEffect) {
     // console.log('commitRoot', finishedWork.child);
+    console.log('DOM执行变更commitMutationEffectsOnFiber~~~~~~~~~~~~~~~~~~~~~~~~~~');
+    // 当DOM执行完成变更之后
     commitMutationEffectsOnFiber(finishedWork, root);
+    // 执行LayoutEffect
+    console.log('DOM执行变更后commitLayoutEffects~~~~~~~~~~~~~~~~~~~~~~~~~~');
+    commitLayoutEffects(finishedWork, root);
+    if (rootDoesHavaPassiveEffect) {
+      rootDoesHavaPassiveEffect = false;
+      rootWithPendingPassiveEffects = root;
+    }
   }
-  // 执行完成后，
+  // 等DOM变更完成之后，执行完成后，
   root.current = finishedWork;
 }
 
@@ -70,10 +111,20 @@ function prepareFreshStack(root) {
   workInProgress = createWorkInProgress(root.current, null);
   finishQueueingConcurrentUpdates();
 }
+
+// 开始同步工作循环
+function workLoopConcurrent() {
+  // console.log("🚀 ~ workLoopSync ~ workInProgress:", workInProgress)
+  // 如果有下一个要构建的fiber任务并且时间片没有过期
+  while (workInProgress !== null && !shouldYield()) {
+    performanceUnit(workInProgress);
+  }
+}
+
 // 开始同步工作循环
 function workLoopSync() {
   // console.log("🚀 ~ workLoopSync ~ workInProgress:", workInProgress)
-  while (workInProgress !== null) {
+  while (workInProgress !== null && !shouldYield()) {
     performanceUnit(workInProgress);
   }
 }
@@ -120,7 +171,7 @@ function completeUnitOfWork(unitOfWork) {
 function printFinishedWork(fiber) {
   let { child, deletions, flags } = fiber;
   if ((flags & ChildDeletion) !== NoFlags) {
-     fiber.flags &= (~ChildDeletion);
+    fiber.flags &= (~ChildDeletion);
     console.log("子节点删除" + deletions.map(item => `${item.type}#${item.memoizedProps.id}`).join(''));
   }
   while (child) {
@@ -128,7 +179,7 @@ function printFinishedWork(fiber) {
     child = child.sibling;
   }
   if (fiber.flags !== NoFlags) {
-    console.log(getFlags(fiber), getTag(fiber.tag), typeof fiber.type === 'function' ? fiber.type.name: fiber.type, 'FinishedWork----');
+    console.log(getFlags(fiber), getTag(fiber.tag), typeof fiber.type === 'function' ? fiber.type.name : fiber.type, fiber.memoizedProps, 'FinishedWork----');
   }
 }
 
@@ -148,12 +199,14 @@ function getTag(tag) {
 }
 
 function getFlags(fiber) {
-  const {flags, deletions } = fiber;
+  const { flags, deletions } = fiber;
   if (flags === Placement) {
     return '插入'
   } else if (flags === Update) {
     return '更新'
-  } 
+  } else if (flags === (Placement | Update)) {
+    return '移动'
+  }
 
   return flags;
 }

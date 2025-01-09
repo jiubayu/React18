@@ -19,7 +19,7 @@ function reconcileChildren(current, workInProgress, nextChildren) {
   } else {
     // 如果有老的fiber，需要做DOM-DIFF，拿老的子fiber和新的虚拟DOM进行比较，进行最小化的更新
     workInProgress.child = reconcileChildFibers(workInProgress, current.child, nextChildren);
-    console.log(workInProgress.child, ' workInProgress.child----');
+    // console.log(workInProgress.child, ' workInProgress.child----');
     
   }
 }

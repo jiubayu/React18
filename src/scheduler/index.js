@@ -1,4 +1,5 @@
 import { schedulerCallback } from "./src/forks/Schduler";
+
 export function schedulerUpdateOnFiber(root) {
   ensureRootIsScheduled(root);
 }
@@ -8,3 +9,4 @@ function ensureRootIsScheduled(root) {
 function performanceConcurrentWorkOnRoot(root) {
   console.log('performConcurrentWorkOnRoot');
 }
+

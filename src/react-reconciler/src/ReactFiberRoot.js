@@ -6,7 +6,7 @@ import { initializedUpdateQueue } from './ReactFiberClassUpdateQueue';
  * 分别存在根节点 FiberRootNode(div#root)
  * 旧的根Fiber HostRootFiber 
  * 新的根Fiber workInPorgress
- * 其中 根节点和旧的根Fiber关系为  FiberRootNode.current = HostRootFiber HostRootFiber.stateNode = FiberRootNode
+ * 其中 根节点和旧的根Fiber关系为  FiberRootNode.current = HostRootFiber -> HostRootFiber.stateNode = FiberRootNode
  * 旧的Fiber根节点和新的Fiber节点的关系为  HostRootFiber.alternate = workInProgress workInProgress.alternate = HostRootFiber
  * @param {*} containerInfo 
  */

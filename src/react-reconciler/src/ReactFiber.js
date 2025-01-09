@@ -1,7 +1,7 @@
 import { HostComponent, HostRoot, HostText, IndeterminateComponent } from './ReactWorkTags';
 import { NoFlags } from './ReactFiberFlags';
 export function FiberNode(tag, pendingProps, key) {
-  this.tag = tag;
+  this.tag = tag; // FunctionComponent 0  ClassComponent 1 HostRoot 3 HostComponent 5 HostText 6
   this.key = key;
   this.type = null; // fiber类型，来自于虚拟DOM节点的type div，span，p等
   // 每个虚拟DOM => Fiber节点 => 真实DOM
@@ -15,8 +15,9 @@ export function FiberNode(tag, pendingProps, key) {
   this.pendingProps = pendingProps; // 等待生效的属性
   this.memoizedProps = null;        // 已经生效的属性
 
-  // 每个fiber还会有自己的状态，每一种fiber 保存的状态类型是不一样的
+  // 每个fiber还会有自己的状态memoizedState，每一种fiber 保存的状态类型是不一样的
   // 类组件对应的fiber 存的状态就是类的实例 HostRoot存的状态是要渲染的元素，也就是虚拟DOM的起始节点
+  // 函数组件的fiber 存的状态
   this.memoizedState = null;
   // 每个fiber身上有更新队列
   this.updateQueue = null;
@@ -35,6 +36,13 @@ export function FiberNode(tag, pendingProps, key) {
 
 }
 
+/**
+ * 根据节点的tag，属性和key创建fiber
+ * @param {*} tag 节点类型  0 FunctionComponent 1 ClassComponent 3 HostRoot 5 HostComponent 6 HostText
+ * @param {*} pendingProps 将要生效的属性
+ * @param {*} key key
+ * @returns 
+ */
 function createFiber(tag, pendingProps, key) {
   return new FiberNode(tag, pendingProps, key);
 }
